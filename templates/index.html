@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Trạm Giám Sát Không Khí - Hà Đông</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet & Chart.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom right, #e6f0ff, #f0f7ff);
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #004e89;
+      color: #fff;
+      text-align: center;
+      padding: 16px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    header h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    #alert {
+      display: none;
+      background-color: #d90429;
+      color: white;
+      text-align: center;
+      padding: 10px;
+      font-weight: bold;
+    }
+
+    #map {
+      height: 38vh;
+      margin: 15px auto;
+      width: 92%;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    #toggleBtn {
+      background: #0066cc;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 10px auto;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      display: block;
+      transition: background 0.3s;
+    }
+
+    #toggleBtn:hover {
+      background: #005bb5;
+    }
+
+    #chartSection {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease-in-out;
+    }
+
+    .charts {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 24px;
+      padding: 20px;
+    }
+
+    .chart-card {
+      background: white;
+      border-radius: 10px;
+      padding: 12px;
+      width: 300px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s;
+    }
+
+    .chart-card:hover {
+      transform: scale(1.02);
+    }
+
+    .chart-card h3 {
+      text-align: center;
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #004e89;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 180px !important;
+    }
+
+    @media (max-width: 768px) {
+      .chart-card {
+        width: 90%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h2>🌿 Hệ thống giám sát chất lượng không khí - Trạm Hà Đông</h2>
+  </header>
+
+  <div id="alert">⚠️ Cảnh báo: Chất lượng không khí đang ở mức nguy hiểm!</div>
+  <div id="map"></div>
+  <button id="toggleBtn" onclick="toggleCharts()">📊 Hiển thị biểu đồ</button>
+
+  <div id="chartSection">
+    <div class="charts">
+      <div class="chart-card">
+        <h3>Nhiệt độ (°C)</h3>
+        <canvas id="tempChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Độ ẩm (%)</h3>
+        <canvas id="humidChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Khí gas (ppm)</h3>
+        <canvas id="gasChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([20.959968, 105.758247], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let tempChart, humidChart, gasChart;
+
+    async function loadSensorData() {
+      try {
+        const res = await fetch("/api/data");
+        const data = await res.json();
+
+        let danger = false;
+        const labels = [], temps = [], humids = [], gases = [];
+
+        map.eachLayer(layer => {
+          if (layer instanceof L.CircleMarker) map.removeLayer(layer);
+        });
+
+        data.forEach(entry => {
+          if (entry.gas >= 600) danger = true;
+
+          const color = getColor(entry.gas);
+          L.circleMarker([entry.lat, entry.lng], {
+            radius: 8,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.8
+          }).addTo(map).bindPopup(
+            `<b>${entry.name}</b><br/>🌡️ ${entry.temperature}°C<br/>💧 ${entry.humidity}%<br/>🟡 Gas: ${entry.gas}`
+          );
+
+          labels.push(formatTime(entry.timestamp));
+          temps.push(entry.temperature);
+          humids.push(entry.humidity);
+          gases.push(entry.gas);
+        });
+
+        document.getElementById("alert").style.display = danger ? "block" : "none";
+
+        drawChart(tempChart, 'tempChart', 'Nhiệt độ (°C)', labels, temps, '#fb8500');
+        drawChart(humidChart, 'humidChart', 'Độ ẩm (%)', labels, humids, '#219ebc');
+        drawChart(gasChart, 'gasChart', 'Khí gas (ppm)', labels, gases, '#d90429');
+
+      } catch (e) {
+        console.error("Lỗi tải dữ liệu:", e);
+      }
+    }
+
+    function drawChart(chart, id, label, labels, data, color) {
+      if (chart) chart.destroy();
+      const ctx = document.getElementById(id).getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: label,
+            data: data,
+            borderColor: color,
+            backgroundColor: color + '33',
+            tension: 0.3
+          }]
+        },
+        options: {
+          scales: {
+            x: { title: { display: true, text: 'Thời gian' } },
+            y: { beginAtZero: true, title: { display: true, text: label } }
+          },
+          plugins: { legend: { display: false } },
+          responsive: true
+        }
+      });
+
+      if (id === 'tempChart') tempChart = chart;
+      if (id === 'humidChart') humidChart = chart;
+      if (id === 'gasChart') gasChart = chart;
+    }
+
+    function toggleCharts() {
+      const section = document.getElementById("chartSection");
+      const btn = document.getElementById("toggleBtn");
+      const isHidden = section.style.maxHeight === "0px" || !section.style.maxHeight;
+
+      if (isHidden) {
+        section.style.maxHeight = "1500px";
+        btn.textContent = "📉 Ẩn biểu đồ";
+      } else {
+        section.style.maxHeight = "0px";
+        btn.textContent = "📊 Hiển thị biểu đồ";
+      }
+    }
+
+    function getColor(gas) {
+      if (gas < 300) return 'green';
+      if (gas < 600) return 'orange';
+      return 'red';
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts * 1000);
+      return d.toLocaleTimeString('vi-VN');
+    }
+
+    loadSensorData();
+    setInterval(loadSensorData, 10000);
+  </script>
+</body>
+</html>
