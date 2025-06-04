@@ -49,11 +49,10 @@ Khởi động server Django để ứng dụng có thể hoạt động:
 python manage.py runserver
 Bước 4: Truy Cập Giao Diện Web
 Sau khi chạy server thành công, bạn có thể truy cập ứng dụng thông qua trình duyệt tại địa chỉ:
-
 http://127.0.0.1:8000
+
+
 Liên Hệ
 Tác giả: Nguyễn Duy Quang
-
 Email: quangduy1923@gmail.com
-
 Chúc bạn thành công với dự án Trạm Khí Tượng Không Khí!
