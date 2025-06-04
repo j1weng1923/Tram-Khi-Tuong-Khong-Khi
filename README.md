@@ -53,6 +53,7 @@ http://127.0.0.1:8000
 
 
 Liên Hệ
-Tác giả: Nguyễn Duy Quang
-Email: quangduy1923@gmail.com
+-Tác giả: Nguyễn Duy Quang
+-Email: quangduy1923@gmail.com
+
 Chúc bạn thành công với dự án Trạm Khí Tượng Không Khí!
